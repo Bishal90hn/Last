@@ -1,3 +1,4 @@
+
 require('dotenv').config();
 const { Telegraf } = require('telegraf');
 const schedule = require('node-schedule');
@@ -12,13 +13,10 @@ const telegramChannels = [
   '@TrickXpert',
   '@LNRQ0Y1-9RkzZDRl',
   '@Th6aG5Zaxz_i_u7a',
-  // Add more channels if needed
 ];
 
 function cleanText(text) {
-  // Remove channel names and unwanted text
   let cleaned = text.replace(/@[\w]+/g, '').replace(/#[\w]+/g, '').trim();
-  // Add professional touch
   return `🔥 *Super Deal Alert!* 🔥\n\n${cleaned}\n\n🛒 Grab it now before it’s gone! #DeelDhamaka`;
 }
 
@@ -59,7 +57,6 @@ async function postDeals() {
       } catch (error) {
         console.error(`Error posting deal: ${error.message}`);
       }
-      // Delay to avoid rate limits
       await new Promise((resolve) => setTimeout(resolve, 3000));
     }
   } catch (error) {
@@ -71,6 +68,6 @@ async function postDeals() {
 schedule.scheduleJob('0 10 * * *', postDeals);
 
 // Start bot
-bot.launch().then(() => console.log('Bot started'));
+bot.launch().then(() => console.log('Bot started successfully'));
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
