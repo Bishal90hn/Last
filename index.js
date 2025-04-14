@@ -1,34 +1,41 @@
-
 require('dotenv').config();
 const { Telegraf } = require('telegraf');
 const schedule = require('node-schedule');
 const axios = require('axios');
 const cheerio = require('cheerio');
-const Agent = require('socks5-http-client/lib/Agent');
 
-// Proxy Configuration
-const proxyList = [
-  { host: 'proxy1.example.com', port: 1080, username: 'user1', password: 'pass1' }, // Replace with real proxies
-  { host: 'proxy2.example.com', port: 1080, username: 'user2', password: 'pass2' }, // Replace with real proxies
+// यूजर-एजेंट लिस्ट (मानव जैसा व्यवहार के लिए)
+const userAgents = [
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+  'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:91.0) Gecko/20100101 Firefox/91.0',
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15',
 ];
 
-function getRandomProxy() {
-  if (proxyList.length === 0) return null;
-  return proxyList[Math.floor(Math.random() * proxyList.length)];
+// रैंडम यूजर-एजेंट चुनने की फंक्शन
+function getRandomUserAgent() {
+  return userAgents[Math.floor(Math.random() * userAgents.length)];
 }
 
-function createProxyAgent() {
-  const proxy = getRandomProxy();
-  if (!proxy) return null;
-  return new Agent({
-    socksHost: proxy.host,
-    socksPort: proxy.port,
-    socksUsername: proxy.username,
-    socksPassword: proxy.password,
-  });
+// Bot और कॉन्फ़िगरेशन
+const bot = new Telegraf(process.env.BOT_TOKEN);
+const channelId = process.env.CHANNEL_ID || '@DeelDhamaka3';
+const categories = ['grocery', 'electronics', 'fashion'];
+const telegramChannels = [
+  '@bigsavings_lootdeals',
+  '@Loot_DealsX',
+  '@TrickXpert',
+  '@LNRQ0Y1-9RkzZDRl',
+  '@Th6aG5Zaxz_i_u7a',
+];
+
+// टेक्स्ट को साफ करने की फंक्शन
+function cleanText(text) {
+  let cleaned = text.replace(/@[\w]+/g, '').replace(/#[\w]+/g, '').trim();
+  return `🔥 *Super Deal Alert!* 🔥\n\n${cleaned}\n\n🛒 Grab it now before it’s gone! #DeelDhamaka`;
 }
 
-// Scraping Functions
+// Flipkart से डील स्क्रैप करना
 async function scrapeFlipkart(category) {
   const categories = {
     grocery: 'https://www.flipkart.com/grocery-supermart-store',
@@ -38,9 +45,9 @@ async function scrapeFlipkart(category) {
 
   try {
     const url = categories[category] || categories.grocery;
+    const userAgent = getRandomUserAgent();
     const response = await axios.get(url, {
-      httpsAgent: createProxyAgent(),
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+      headers: { 'User-Agent': userAgent },
     });
     const $ = cheerio.load(response.data);
     const deals = [];
@@ -55,13 +62,16 @@ async function scrapeFlipkart(category) {
       }
     });
 
-    return deals.slice(0, 5); // Limit to 5 deals per category
+    // 5 सेकंड का डिले, ब्लॉकिंग से बचने के लिए
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    return deals.slice(0, 5); // 5 डील्स प्रति कैटेगरी
   } catch (error) {
     console.error(`Flipkart scraping error (${category}):`, error.message);
     return [];
   }
 }
 
+// Telegram चैनल से डील स्क्रैप करना
 async function scrapeTelegramChannel(bot, channel) {
   try {
     const updates = await bot.telegram.getUpdates({ offset: -10 });
@@ -78,18 +88,17 @@ async function scrapeTelegramChannel(bot, channel) {
       let image = msg.photo;
       if (!image && msg.link) {
         try {
-          const response = await axios.get(msg.link, { httpsAgent: createProxyAgent() });
+          const userAgent = getRandomUserAgent();
+          const response = await axios.get(msg.link, {
+            headers: { 'User-Agent': userAgent },
+          });
           const $ = cheerio.load(response.data);
           image = $('meta[property="og:image"]').attr('content') || '';
         } catch (error) {
           console.error(`Image capture error for ${msg.link}:`, error.message);
         }
       }
-      deals.push({
-        text: msg.text,
-        image,
-        link: msg.link,
-      });
+      deals.push({ text: msg.text, image, link: msg.link });
     }
     return deals;
   } catch (error) {
@@ -98,27 +107,12 @@ async function scrapeTelegramChannel(bot, channel) {
   }
 }
 
-// Bot Logic
-const bot = new Telegraf(process.env.BOT_TOKEN);
-const channelId = process.env.CHANNEL_ID || '@DeelDhamaka3';
-const categories = ['grocery', 'electronics', 'fashion'];
-const telegramChannels = [
-  '@bigsavings_lootdeals',
-  '@Loot_DealsX',
-  '@TrickXpert',
-  '@LNRQ0Y1-9RkzZDRl',
-  '@Th6aG5Zaxz_i_u7a',
-];
-
-function cleanText(text) {
-  let cleaned = text.replace(/@[\w]+/g, '').replace(/#[\w]+/g, '').trim();
-  return `🔥 *Super Deal Alert!* 🔥\n\n${cleaned}\n\n🛒 Grab it now before it’s gone! #DeelDhamaka`;
-}
-
+// डील पोस्ट करना
 async function postDeals() {
   try {
     let allDeals = [];
 
+    // Flipkart से डील्स
     for (const category of categories) {
       const deals = await scrapeFlipkart(category);
       allDeals.push(...deals.map((deal) => ({
@@ -128,13 +122,16 @@ async function postDeals() {
       })));
     }
 
+    // Telegram चैनल से डील्स
     for (const channel of telegramChannels) {
       const deals = await scrapeTelegramChannel(bot, channel);
       allDeals.push(...deals);
     }
 
+    // 10-12 रैंडम डील्स चुनें
     allDeals = allDeals.sort(() => Math.random() - 0.5).slice(0, Math.floor(Math.random() * 3) + 10);
 
+    // डील्स पोस्ट करें
     for (const deal of allDeals) {
       const caption = cleanText(deal.text + (deal.link ? `\n${deal.link}` : ''));
       try {
@@ -148,6 +145,7 @@ async function postDeals() {
       } catch (error) {
         console.error(`Error posting deal: ${error.message}`);
       }
+      // पोस्ट के बीच 3 सेकंड का डिले, रेट लिमिट से बचने के लिए
       await new Promise((resolve) => setTimeout(resolve, 3000));
     }
   } catch (error) {
@@ -155,8 +153,10 @@ async function postDeals() {
   }
 }
 
+// रोज़ सुबह 10 बजे (IST) डील्स पोस्ट करने का शेड्यूल
 schedule.scheduleJob('0 10 * * *', postDeals);
 
+// Bot शुरू करें
 bot.launch().then(() => console.log('Bot started successfully'));
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
