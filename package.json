@@ -1,0 +1,13 @@
+{
+  "name": "loot-deal-bot",
+  "version": "1.0.0",
+  "main": "telegramBot.js",
+  "scripts": {
+    "start": "node telegramBot.js"
+  },
+  "dependencies": {
+    "telegraf": "^4.12.2",
+    "axios": "^1.4.0",
+    "cheerio": "^1.0.0-rc.12"
+  }
+}
